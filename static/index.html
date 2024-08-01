@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with AI</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+    <div class="container mx-auto p-4 flex-grow flex flex-col" hx-ext="ws"
+        ws-connect="wss://go-go-production.up.railway.app/ws">
+        <div id="chat" class="flex-grow overflow-y-auto bg-white rounded-lg shadow-md p-4 mb-4 space-y-4"></div>
+        <form ws-send class="flex space-x-2">
+            <input type="text" name="text" placeholder="Type a message..."
+                class="flex-grow px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="submit"
+                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Send</button>
+        </form>
+    </div>
+    <script>
+        let currentAIMessage = null;
+        let aiMessageContent = '';
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            highlight: function (code, lang) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+            }
+        });
+        function renderMarkdown(content) {
+            return marked.parse(content);
+        }
+        htmx.on("htmx:wsAfterMessage", (event) => {
+            const chat = document.getElementById('chat');
+            const message = JSON.parse(event.detail.message);
+            if (message.text.startsWith("AI: ")) {
+                if (currentAIMessage) {
+                    const contentDiv = currentAIMessage.querySelector('.markdown-content');
+                    contentDiv.innerHTML = renderMarkdown(aiMessageContent);
+                }
+                currentAIMessage = document.createElement('div');
+                currentAIMessage.className = 'message ai bg-green-100 rounded-lg p-4';
+                currentAIMessage.innerHTML = '<strong class="text-green-800">AI:</strong>'; 
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'markdown-content mt-2 text-gray-800';
+                currentAIMessage.appendChild(contentDiv);
+                chat.appendChild(currentAIMessage);
+                aiMessageContent = message.text.substring(4);
+            } else if (currentAIMessage) {
+                aiMessageContent += message.text;
+                const contentDiv = currentAIMessage.querySelector('.markdown-content');
+                contentDiv.innerHTML = renderMarkdown(aiMessageContent);
+            }
+        });
+        document.querySelector('form').addEventListener('submit', (e) => {
+            const input = e.target.querySelector('input[name="text"]');
+            const div = document.createElement('div');
+            div.className = 'message user bg-blue-100 rounded-lg p-4';
+            div.innerHTML = '<strong class="text-blue-800">You:</strong> ' + 
+                '<span class="text-gray-800">' + input.value + '</span>';
+            document.getElementById('chat').appendChild(div);
+            if (currentAIMessage) {
+                const contentDiv = currentAIMessage.querySelector('.markdown-content');
+                contentDiv.innerHTML = renderMarkdown(aiMessageContent);
+            }
+            currentAIMessage = null;
+            aiMessageContent = '';
+        });
+    </script>
+</body>
+</html>
